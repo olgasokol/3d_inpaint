@@ -10,6 +10,9 @@ import torch
 from torch import nn
 import matplotlib.pyplot as plt
 import re
+
+from MiDaS import MiDaS_utils
+
 try:
     import cynetworkx as netx
 except ImportError:
@@ -851,7 +854,7 @@ def get_MiDaS_samples(image_folder, depth_folder, config, specific=None, aft_cer
                                    config['z_shift_range'][traj_idx], path_type=config['traj_types'][traj_idx])
         for xx, yy, zz in zip(sx, sy, sz):
             tgt_poses.append(generic_pose * 1.)
-            tgt_poses[-1][:3, -1] = np.array([xx, yy, zz])
+            tgt_poses[-1][:3, -1] = np.array([xx, yy, zz]) #translation by xx, yy, zz
         tgts_poses += [tgt_poses]    
     tgt_pose = generic_pose * 1
     
@@ -938,14 +941,23 @@ def smooth_cntsyn_gap(init_depth_map, mask_region, context_region, init_mask_reg
         depth_map[fluxin_mask > 0] = fluxin_depths[fluxin_mask > 0]
 
     return depth_map
+import cv2
 
-def read_MiDaS_depth(disp_fi, disp_rescale=10., h=None, w=None):
+def read_MiDaS_depth(disp_fi, disp_rescale=1., h=None, w=None):
     if 'npy' in os.path.splitext(disp_fi)[-1]:
         disp = np.load(disp_fi)
+        disp = disp - disp.min()
+    elif 'pfm' in os.path.splitext(disp_fi)[-1]:
+        from MiDaS.MiDaS_utils import read_pfm
+        (disp, rescale) = read_pfm(disp_fi)
+        disp=disp.astype(np.float32)
+        disp = disp - disp.min()
+        disp = 255 - disp if np.max(disp)>0 else 1 - disp
+        disp_rescale=rescale*disp_rescale
     else:
         disp = imageio.imread(disp_fi).astype(np.float32)
-    disp = disp - disp.min()
-    disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
+
+    # disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
     disp = (disp / disp.max()) * disp_rescale
     if h is not None and w is not None:
         disp = resize(disp / disp.max(), (h, w), order=1) * disp.max()

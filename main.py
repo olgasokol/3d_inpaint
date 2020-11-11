@@ -31,6 +31,7 @@ if config['offscreen_rendering'] is True:
 os.makedirs(config['mesh_folder'], exist_ok=True)
 os.makedirs(config['video_folder'], exist_ok=True)
 os.makedirs(config['depth_folder'], exist_ok=True)
+# how read sample works?
 sample_list = get_MiDaS_samples(config['src_folder'], config['depth_folder'], config, config['specific'])
 normal_canvas, all_canvas = None, None
 
@@ -50,10 +51,13 @@ for idx in tqdm(range(len(sample_list))):
 
     print(f"Running depth extraction at {time.time()}")
     if config['require_midas'] is True:
+        # estimate depth from 1 img
         run_depth([sample['ref_img_fi']], config['src_folder'], config['depth_folder'],
                   config['MiDaS_model_ckpt'], MonoDepthNet, MiDaS_utils, target_w=640)
     if 'npy' in config['depth_format']:
         config['output_h'], config['output_w'] = np.load(sample['depth_fi']).shape[:2]
+    elif 'pfm' in config['depth_format']:
+        config['output_h'], config['output_w'] = cv2.imread(sample['depth_fi']).shape[:2]
     else:
         config['output_h'], config['output_w'] = imageio.imread(sample['depth_fi']).shape[:2]
     frac = config['longer_side_len'] / max(config['output_h'], config['output_w'])
@@ -66,7 +70,8 @@ for idx in tqdm(range(len(sample_list))):
     else:
         config['gray_image'] = False
     image = cv2.resize(image, (config['output_w'], config['output_h']), interpolation=cv2.INTER_AREA)
-    depth = read_MiDaS_depth(sample['depth_fi'], 3.0, config['output_h'], config['output_w'])
+    # load any inverted depth map
+    depth = read_MiDaS_depth(sample['depth_fi'], 1.0, config['output_h'], config['output_w'])
     mean_loc_depth = depth[depth.shape[0]//2, depth.shape[1]//2]
     if not(config['load_ply'] is True and os.path.exists(mesh_fi)):
         vis_photos, vis_depths = sparse_bilateral_filtering(depth.copy(), image.copy(), config, num_iter=config['sparse_iter'], spdb=False)
@@ -89,7 +94,7 @@ for idx in tqdm(range(len(sample_list))):
         depth_feat_model.load_state_dict(depth_feat_weight, strict=True)
         depth_feat_model = depth_feat_model.to(device)
         depth_feat_model.eval()
-        depth_feat_model = depth_feat_model.to(device)
+        # depth_feat_model = depth_feat_model.to(device)
         print(f"Loading rgb model at {time.time()}")
         rgb_model = Inpaint_Color_Net()
         rgb_feat_weight = torch.load(config['rgb_feat_model_ckpt'],
@@ -125,13 +130,14 @@ for idx in tqdm(range(len(sample_list))):
 
 
     print(f"Making video at {time.time()}")
-    videos_poses, video_basename = copy.deepcopy(sample['tgts_poses']), sample['tgt_name']
-    top = (config.get('original_h') // 2 - sample['int_mtx'][1, 2] * config['output_h'])
-    left = (config.get('original_w') // 2 - sample['int_mtx'][0, 2] * config['output_w'])
-    down, right = top + config['output_h'], left + config['output_w']
-    border = [int(xx) for xx in [top, down, left, right]]
-    normal_canvas, all_canvas = output_3d_photo(verts.copy(), colors.copy(), faces.copy(), copy.deepcopy(Height), copy.deepcopy(Width), copy.deepcopy(hFov), copy.deepcopy(vFov),
-                        copy.deepcopy(sample['tgt_pose']), sample['video_postfix'], copy.deepcopy(sample['ref_pose']), copy.deepcopy(config['video_folder']),
-                        image.copy(), copy.deepcopy(sample['int_mtx']), config, image,
-                        videos_poses, video_basename, config.get('original_h'), config.get('original_w'), border=border, depth=depth, normal_canvas=normal_canvas, all_canvas=all_canvas,
-                        mean_loc_depth=mean_loc_depth)
+    if (config['inference_video']):
+        videos_poses, video_basename = copy.deepcopy(sample['tgts_poses']), sample['tgt_name']
+        top = (config.get('original_h') // 2 - sample['int_mtx'][1, 2] * config['output_h'])
+        left = (config.get('original_w') // 2 - sample['int_mtx'][0, 2] * config['output_w'])
+        down, right = top + config['output_h'], left + config['output_w']
+        border = [int(xx) for xx in [top, down, left, right]]
+        normal_canvas, all_canvas = output_3d_photo(verts.copy(), colors.copy(), faces.copy(), copy.deepcopy(Height), copy.deepcopy(Width), copy.deepcopy(hFov), copy.deepcopy(vFov),
+                            copy.deepcopy(sample['tgt_pose']), sample['video_postfix'], copy.deepcopy(sample['ref_pose']), copy.deepcopy(config['video_folder']),
+                            image.copy(), copy.deepcopy(sample['int_mtx']), config, image,
+                            videos_poses, video_basename, config.get('original_h'), config.get('original_w'), border=border, depth=depth, normal_canvas=normal_canvas, all_canvas=all_canvas,
+                            mean_loc_depth=mean_loc_depth)

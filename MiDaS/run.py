@@ -22,7 +22,8 @@ def run_depth(img_names, input_path, output_path, model_path, Net, utils, target
     print("initialize")
 
     # select device
-    device = torch.device("cpu")
+    device = "cpu"
+    # device = 0
     print("device: %s" % device)
 
     # load network
@@ -62,6 +63,7 @@ def run_depth(img_names, input_path, output_path, model_path, Net, utils, target
             output_path, os.path.splitext(os.path.basename(img_name))[0]
         )
         np.save(filename + '.npy', depth)
+        cv2.imwrite(filename + '.pfm', depth)
         utils.write_depth(filename, depth, bits=2)
 
     print("finished")
