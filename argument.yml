@@ -24,12 +24,12 @@ video_folder: video
 load_ply: False
 save_ply: True
 inference_video: False
-gpu_ids: -1
+gpu_ids: 0
 offscreen_rendering: False
 img_format: '.jpg'
-depth_format: '.pfm'
+depth_format: '.npy'
 require_midas: False
-depth_threshold: 0.02
+depth_threshold: 0.04
 ext_edge_threshold: 0.002
 sparse_iter: 5
 filter_size: [7, 7, 5, 5, 5]
