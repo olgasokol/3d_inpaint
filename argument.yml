@@ -17,12 +17,12 @@ mesh_folder: mesh
 video_folder: video
 load_ply: False
 save_ply: True
-inference_video: True
+inference_video: False
 gpu_ids: 0
 offscreen_rendering: False
 img_format: '.jpg'
 depth_format: '.npy'
-require_midas: True
+require_midas: False
 depth_threshold: 0.04
 ext_edge_threshold: 0.002
 sparse_iter: 5
@@ -39,8 +39,10 @@ log_depth: True
 largest_size: 512
 depth_edge_dilate: 10
 depth_edge_dilate_2: 5
-extrapolate_border: True
+extrapolate_border: False
 extrapolation_thickness: 60
 repeat_inpaint_edge: True
 crop_border: [0.03, 0.03, 0.05, 0.03]
 anti_flickering: True
+min_node_in_cc: 200
+time_format: '%Hh %Mm %Sc'

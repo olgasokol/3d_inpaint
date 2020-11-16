@@ -52,7 +52,7 @@ def create_mesh(depth, image, int_mtx, config):
     image = np.pad(image,
                     pad_width=((config['extrapolation_thickness'], config['extrapolation_thickness']),
                                (config['extrapolation_thickness'], config['extrapolation_thickness']),
-                               (0, 0)),
+                               (0, 0)), # zeros for channel padding
                     mode='constant')
     depth = np.pad(depth,
                     pad_width=((config['extrapolation_thickness'], config['extrapolation_thickness']),
@@ -70,10 +70,15 @@ def tear_edges(mesh, threshold = 0.00025, xy2depth=None):
         if abs(mesh_nodes[edge[0]]['disp'] - mesh_nodes[edge[1]]['disp']) > threshold:
             remove_edge_list.append((edge[0], edge[1]))
 
+            # flips node order if cond if first edge is further away
             near, far = edge if abs(edge[0][2]) < abs(edge[1][2]) else edge[::-1]
 
+            # no real effect
             mesh_nodes[far]['near'] = [] if mesh_nodes[far].get('near') is None else mesh_nodes[far]['near'].append(near)
             mesh_nodes[near]['far'] = [] if mesh_nodes[near].get('far') is None else mesh_nodes[near]['far'].append(far)
+
+            mesh_nodes[far]['near'] = [near] if mesh_nodes[far].get('near') is None else mesh_nodes[far]['near'].append(near)
+            mesh_nodes[near]['far'] = [far] if mesh_nodes[near].get('far') is None else mesh_nodes[near]['far'].append(far)
 
             if near[0] == far[0]:
                 remove_horizon[near[0], np.minimum(near[1], far[1])] = 1
@@ -85,8 +90,8 @@ def tear_edges(mesh, threshold = 0.00025, xy2depth=None):
 
     dang_horizon = np.where(np.roll(remove_horizon, 1, 0) + np.roll(remove_horizon, -1, 0) - remove_horizon == 2)
     dang_vertical = np.where(np.roll(remove_vertical, 1, 1) + np.roll(remove_vertical, -1, 1) - remove_vertical == 2)
-
-    horizon_condition = lambda x, y: mesh.graph['bord_up'] + 1 <= x < mesh.graph['bord_down'] - 1
+    # dang_ is just number??
+    horizon_condition = lambda x, y: mesh.graph['bord_up'] + 1 <= x < mesh.graph['bord_down'] - 1 # node is in valid position
     vertical_condition = lambda x, y: mesh.graph['bord_left'] + 1 <= y < mesh.graph['bord_right'] - 1
 
     prjto3d = lambda x, y: (x, y, xy2depth[(x, y)][0])
@@ -100,7 +105,7 @@ def tear_edges(mesh, threshold = 0.00025, xy2depth=None):
         if vertical_condition(x, y) and node_existence(x, y) and node_existence(x+1, y):
             remove_edge_list.append((prjto3d(x, y), prjto3d(x+1, y)))
     mesh.remove_edges_from(remove_edge_list)
-
+    # only 2 dangling points??
     return mesh
 
 def calculate_fov(mesh):
@@ -178,11 +183,13 @@ def generate_init_node(mesh, config, min_node_in_cc):
     for node in remove_nodes:
         far_nodes = [] if mesh_nodes[node].get('far') is None else mesh_nodes[node]['far']
         for far_node in far_nodes:
-            if mesh.has_node(far_node) and mesh_nodes[far_node].get('near') is not None and node in mesh_nodes[far_node]['near']:
+            if mesh.has_node(far_node) and mesh_nodes[far_node].get('near') is not None \
+                    and node in mesh_nodes[far_node]['near']:
                 mesh_nodes[far_node]['near'].remove(node)
         near_nodes = [] if mesh_nodes[node].get('near') is None else mesh_nodes[node]['near']
         for near_node in near_nodes:
-            if mesh.has_node(near_node) and mesh_nodes[near_node].get('far') is not None and node in mesh_nodes[near_node]['far']:
+            if mesh.has_node(near_node) and mesh_nodes[near_node].get('far') is not None \
+                    and node in mesh_nodes[near_node]['far']:
                 mesh_nodes[near_node]['far'].remove(node)
 
     [mesh.remove_node(node) for node in remove_nodes]
@@ -240,7 +247,7 @@ def reassign_floating_island(mesh, info_on_pix, image, depth):
     mesh_nodes = mesh.nodes
     bord_up, bord_down = mesh.graph['bord_up'], mesh.graph['bord_down']
     bord_left, bord_right = mesh.graph['bord_left'], mesh.graph['bord_right']
-    W = mesh.graph['W']
+    # W = mesh.graph['W']
     lost_map = np.zeros((H, W))
 
     '''
@@ -271,8 +278,8 @@ def reassign_floating_island(mesh, info_on_pix, image, depth):
         lost_xs, lost_ys = np.where(label_lost_map == i)
         surr_edge_ids = {}
         for lost_x, lost_y in zip(lost_xs, lost_ys):
-            if (lost_x, lost_y) == (295, 389) or (lost_x, lost_y) == (296, 389):
-                import pdb; pdb.set_trace()
+            # if (lost_x, lost_y) == (295, 389) or (lost_x, lost_y) == (296, 389):
+            #     import pdb; pdb.set_trace()
             for ne in get_cross_nes(lost_x, lost_y):
                 if key_exist(info_on_pix, ne):
                     for info in info_on_pix[ne]:
@@ -283,6 +290,7 @@ def reassign_floating_island(mesh, info_on_pix, image, depth):
                                                 key_exist(surr_edge_ids, edge_id) else [ne_node]
         if len(surr_edge_ids) == 0:
             continue
+        # sort from longest cc to shortest cc
         edge_id, edge_nodes = sorted([*surr_edge_ids.items()], key=lambda x: len(x[1]), reverse=True)[0]
         edge_depth_map = np.zeros((H, W))
         for node in edge_nodes:
@@ -301,6 +309,7 @@ def reassign_floating_island(mesh, info_on_pix, image, depth):
                     real_nes.append(ne)
                 if len(real_nes) == 0:
                     continue
+                # mean depth == init depth??
                 reassign_depth = np.mean(propagated_depth)
                 label_lost_map[lost_x, lost_y] = 0
                 edge_depth_map[lost_x, lost_y] = reassign_depth
@@ -432,8 +441,9 @@ def group_edges(LDI, config, image, remove_conflict_ordinal, spdb=False):
                     discont_nes.add(ne_node)
                 else:
                     diag_candi_anc.add(ne_node)
-            inval_diag_candi = set([inval_diagonal for ne_node in discont_nes for inval_diagonal in LDI.neighbors(ne_node) if \
-                                     abs(inval_diagonal[0] - node[0]) < 2 and abs(inval_diagonal[1] - node[1]) < 2])
+            l=[inval_diagonal for ne_node in discont_nes for inval_diagonal in LDI.neighbors(ne_node) if \
+                                     abs(inval_diagonal[0] - node[0]) < 2 and abs(inval_diagonal[1] - node[1]) < 2]
+            inval_diag_candi = set(l)
             for ne_node in diag_candi_anc:
                 if ne_node[0] == node[0]:
                     diagonal_xys = [[ne_node[0] + 1, ne_node[1]], [ne_node[0] - 1, ne_node[1]]]
@@ -904,7 +914,7 @@ def remove_dangling(mesh, edge_ccs, edge_mesh, info_on_pix, image, depth, config
 def context_and_holes(mesh, edge_ccs, config, specific_edge_id, specific_edge_loc, depth_feat_model,
                       connect_points_ccs=None, inpaint_iter=0, filter_edge=False, vis_edge_id=None):
     edge_maps = np.zeros((mesh.graph['H'], mesh.graph['W'])) - 1
-    mask_info = {}
+    # mask_info = {}
     for edge_id, edge_cc in enumerate(edge_ccs):
         for edge_node in edge_cc:
             edge_maps[edge_node[0], edge_node[1]] = edge_id
@@ -1418,11 +1428,11 @@ def DL_inpaint_edge(mesh,
     edge_condition = lambda x, m: m.nodes[x].get('far') is not None and len(m.nodes[x].get('far')) > 0
     edge_map = get_map_from_ccs(edge_ccs, mesh.graph['H'], mesh.graph['W'], mesh, edge_condition)
     np_depth, np_image = depth.copy(), image.copy()
-    image_c = image.shape[-1]
-    image = torch.FloatTensor(image.transpose(2, 0, 1)).unsqueeze(0).to(device)
+    # image_c = image.shape[-1]
+    # image = torch.FloatTensor(image.transpose(2, 0, 1)).unsqueeze(0).to(device)
     if depth.ndim < 3:
         depth = depth[..., None]
-    depth = torch.FloatTensor(depth.transpose(2, 0, 1)).unsqueeze(0).to(device)
+    # depth = torch.FloatTensor(depth.transpose(2, 0, 1)).unsqueeze(0).to(device)
     mesh.graph['max_edge_id'] = len(edge_ccs)
     connnect_points_ccs = [set() for _ in range(len(edge_ccs))]
     gp_time, tmp_mesh_time, bilateral_time = 0, 0, 0
@@ -1457,13 +1467,13 @@ def DL_inpaint_edge(mesh,
             patch_edge_dict['disp'], patch_edge_dict['edge'] = \
             crop_maps_by_size(union_size, edge_dict['mask'], edge_dict['context'],
                                 edge_dict['rgb'], edge_dict['disp'], edge_dict['edge'])
-        x_anchor, y_anchor = [union_size['x_min'], union_size['x_max']], [union_size['y_min'], union_size['y_max']]
+        # x_anchor, y_anchor = [union_size['x_min'], union_size['x_max']], [union_size['y_min'], union_size['y_max']]
         tensor_edge_dict = convert2tensor(patch_edge_dict)
-        input_edge_feat = torch.cat((tensor_edge_dict['rgb'],
-                                        tensor_edge_dict['disp'],
-                                        tensor_edge_dict['edge'],
-                                        1 - tensor_edge_dict['context'],
-                                        tensor_edge_dict['mask']), dim=1)
+        # input_edge_feat = torch.cat((tensor_edge_dict['rgb'],
+        #                                 tensor_edge_dict['disp'],
+        #                                 tensor_edge_dict['edge'],
+        #                                 1 - tensor_edge_dict['context'],
+        #                                 tensor_edge_dict['mask']), dim=1)
         if require_depth_edge(patch_edge_dict['edge'], patch_edge_dict['mask']) and inpaint_iter == 0:
             with torch.no_grad():
                 depth_edge_output = depth_edge_model.forward_3P(tensor_edge_dict['mask'],
@@ -1581,6 +1591,7 @@ def DL_inpaint_edge(mesh,
                                         tensor_edge_dict['mask']), dim=1)
         edge_dict['output'] = edge_dict['edge'].copy()
 
+        # inpaint_iter 1
         if require_depth_edge(patch_edge_dict['edge'], patch_edge_dict['mask']) and inpaint_iter == 0:
             edge_dict['fpath_map'], edge_dict['npath_map'] = edge_dict['fpath_map'] * 0 - 1, edge_dict['npath_map'] * 0 - 1
             end_pts = edges_in_mask[edge_id]
@@ -1721,6 +1732,7 @@ def DL_inpaint_edge(mesh,
         rgb_dict['output'][union_size['x_min']:union_size['x_max'], union_size['y_min']:union_size['y_max']] = \
             patch_rgb_dict['output']
 
+        # inpaint_iter 1 or ...
         if require_depth_edge(patch_edge_dict['edge'], patch_edge_dict['mask']) or inpaint_iter > 0:
             edge_occlusion = True
         else:
@@ -1831,20 +1843,21 @@ def write_ply(image,
 
     H, W = input_mesh.graph['H'], input_mesh.graph['W']
     input_mesh = tear_edges(input_mesh, config['depth_threshold'], xy2depth)
-    input_mesh, info_on_pix = generate_init_node(input_mesh, config, min_node_in_cc=200)
+    # remove layers that consist of less then min_node_in_cc
+    # remove nodes that belong to connected components that consist of less than min_node_in_cc nodes
+    # otherwise, add info abt "good" nodes to info_on_pix
+    input_mesh, info_on_pix = generate_init_node(input_mesh, config, min_node_in_cc=config['min_node_in_cc'])
+    # more like enumerate edges + one more pass through fg and bg nodes to clean it up and remove all conflicts
     edge_ccs, input_mesh, edge_mesh = group_edges(input_mesh, config, image, remove_conflict_ordinal=False)
-    edge_canvas = np.zeros((H, W)) - 1
-
     input_mesh, info_on_pix, depth = reassign_floating_island(input_mesh, info_on_pix, image, depth)
+    # update status of nodes neighbours
     input_mesh = update_status(input_mesh, info_on_pix)
-    specific_edge_id = []
     edge_ccs, input_mesh, edge_mesh = group_edges(input_mesh, config, image, remove_conflict_ordinal=True)
-    pre_depth = depth.copy()
     input_mesh, info_on_pix, edge_mesh, depth, aft_mark = remove_dangling(input_mesh, edge_ccs, edge_mesh, info_on_pix, image, depth, config)
 
+    # update status of depth map and nodes neighbours
     input_mesh, depth, info_on_pix = update_status(input_mesh, info_on_pix, depth)
     edge_ccs, input_mesh, edge_mesh = group_edges(input_mesh, config, image, remove_conflict_ordinal=True)
-    edge_canvas = np.zeros((H, W)) - 1
 
     print("refined edges at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
     mesh, info_on_pix, depth = fill_missing_node(input_mesh, info_on_pix, image, depth)
@@ -1894,7 +1907,6 @@ def write_ply(image,
                                                 depth_edge_model, depth_feat_model, rgb_model, config, direc="left-down")
     specific_edge_loc = None
     specific_edge_id = []
-    vis_edge_id = None
     context_ccs, mask_ccs, broken_mask_ccs, edge_ccs, erode_context_ccs, \
         init_mask_connect, edge_maps, extend_context_ccs, extend_edge_ccs, extend_erode_context_ccs = \
                                                                                 context_and_holes(input_mesh,
@@ -1908,9 +1920,7 @@ def write_ply(image,
     mask = np.zeros((H, W))
     context = np.zeros((H, W))
     vis_edge_ccs = filter_edge(input_mesh, edge_ccs, config)
-    edge_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W'])) - 1
     specific_edge_loc = None
-    FG_edge_maps = edge_maps.copy()
     edge_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W'])) - 1
     # for cc_id, cc in enumerate(edge_ccs):
     #     for node in cc:
@@ -1963,7 +1973,7 @@ def write_ply(image,
     # for cc_id, cc in enumerate(edge_ccs):
     #     for node in cc:
     #         edge_canvas[node[0], node[1]] = cc_id
-    specific_edge_id = []
+    # specific_edge_id = []
     input_mesh, info_on_pix, specific_edge_nodes, new_edge_ccs, _, image = DL_inpaint_edge(input_mesh,
                                                                                     info_on_pix,
                                                                                     config,

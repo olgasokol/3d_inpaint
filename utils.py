@@ -10,6 +10,9 @@ import torch
 from torch import nn
 import matplotlib.pyplot as plt
 import re
+
+from MiDaS import MiDaS_utils
+
 try:
     import cynetworkx as netx
 except ImportError:
@@ -851,7 +854,7 @@ def get_MiDaS_samples(image_folder, depth_folder, config, specific=None, aft_cer
                                    config['z_shift_range'][traj_idx], path_type=config['traj_types'][traj_idx])
         for xx, yy, zz in zip(sx, sy, sz):
             tgt_poses.append(generic_pose * 1.)
-            tgt_poses[-1][:3, -1] = np.array([xx, yy, zz])
+            tgt_poses[-1][:3, -1] = np.array([xx, yy, zz]) #translation by xx, yy, zz
         tgts_poses += [tgt_poses]    
     tgt_pose = generic_pose * 1
     
