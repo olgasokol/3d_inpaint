@@ -77,8 +77,8 @@ def tear_edges(mesh, threshold = 0.00025, xy2depth=None):
             mesh_nodes[far]['near'] = [] if mesh_nodes[far].get('near') is None else mesh_nodes[far]['near'].append(near)
             mesh_nodes[near]['far'] = [] if mesh_nodes[near].get('far') is None else mesh_nodes[near]['far'].append(far)
 
-            mesh_nodes[far]['near'] = [near] if mesh_nodes[far].get('near') is None else mesh_nodes[far]['near'].append(near)
-            mesh_nodes[near]['far'] = [far] if mesh_nodes[near].get('far') is None else mesh_nodes[near]['far'].append(far)
+            # mesh_nodes[far]['near'] = [near] if mesh_nodes[far].get('near') is None else mesh_nodes[far]['near'].append(near)
+            # mesh_nodes[near]['far'] = [far] if mesh_nodes[near].get('far') is None else mesh_nodes[near]['far'].append(far)
 
             if near[0] == far[0]:
                 remove_horizon[near[0], np.minimum(near[1], far[1])] = 1
@@ -1951,7 +1951,7 @@ def write_ply(image,
     print("first inpaint done at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
 
     specific_edge_id = []
-    edge_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
+    # edge_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
     connect_points_ccs = [set() for _ in connect_points_ccs]
     context_ccs, mask_ccs, broken_mask_ccs, edge_ccs, erode_context_ccs, \
         init_mask_connect, edge_maps, extend_context_ccs, extend_edge_ccs, extend_erode_context_ccs = \
