@@ -1846,6 +1846,7 @@ def write_ply(image,
     edge_ccs, input_mesh, edge_mesh = group_edges(input_mesh, config, image, remove_conflict_ordinal=True)
     edge_canvas = np.zeros((H, W)) - 1
 
+    print("refined edges at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
     mesh, info_on_pix, depth = fill_missing_node(input_mesh, info_on_pix, image, depth)
     if config['extrapolate_border'] is True:
         pre_depth = depth.copy()
@@ -1902,9 +1903,8 @@ def write_ply(image,
                                                                                             specific_edge_id,
                                                                                             specific_edge_loc,
                                                                                             depth_feat_model,
-                                                                                            inpaint_iter=0,
-                                                                                            vis_edge_id=vis_edge_id)
-    edge_canvas = np.zeros((H, W))
+                                                                                            inpaint_iter=0)
+    print("first context done at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
     mask = np.zeros((H, W))
     context = np.zeros((H, W))
     vis_edge_ccs = filter_edge(input_mesh, edge_ccs, config)
@@ -1938,12 +1938,23 @@ def write_ply(image,
                                                                                                             specific_edge_id,
                                                                                                             specific_edge_loc,
                                                                                                             inpaint_iter=0)
+    print("first inpaint done at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
+
     specific_edge_id = []
     edge_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
     connect_points_ccs = [set() for _ in connect_points_ccs]
-    context_ccs, mask_ccs, broken_mask_ccs, edge_ccs, erode_context_ccs, init_mask_connect, \
-        edge_maps, extend_context_ccs, extend_edge_ccs, extend_erode_context_ccs = \
-            context_and_holes(input_mesh, new_edge_ccs, config, specific_edge_id, specific_edge_loc, depth_feat_model, connect_points_ccs, inpaint_iter=1)
+    context_ccs, mask_ccs, broken_mask_ccs, edge_ccs, erode_context_ccs, \
+        init_mask_connect, edge_maps, extend_context_ccs, extend_edge_ccs, extend_erode_context_ccs = \
+                                                                                    context_and_holes(input_mesh,
+                                                                                                      new_edge_ccs,
+                                                                                                      config,
+                                                                                                      specific_edge_id,
+                                                                                                      specific_edge_loc,
+                                                                                                      depth_feat_model,
+                                                                                                      connect_points_ccs,
+                                                                                                      inpaint_iter=1)
+    print("second context done at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
+
     mask_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
     context_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
     erode_context_ccs_canvas = np.zeros((input_mesh.graph['H'], input_mesh.graph['W']))
@@ -1975,6 +1986,15 @@ def write_ply(image,
                                                                                     specific_edge_id,
                                                                                     specific_edge_loc,
                                                                                     inpaint_iter=1)
+
+    print("second inpaint done at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
+
+    rgb_model = None
+    depth_edge_model = None
+    depth_edge_model_init = None
+    depth_feat_model = None
+    torch.cuda.empty_cache()
+
     vertex_id = 0
     input_mesh.graph['H'], input_mesh.graph['W'] = input_mesh.graph['noext_H'], input_mesh.graph['noext_W']
     background_canvas = np.zeros((input_mesh.graph['H'],
@@ -2032,7 +2052,7 @@ def write_ply(image,
                 node_str_point.append(str_pt)
     str_faces = generate_face(input_mesh, info_on_pix, config)
     if config['save_ply'] is True:
-        print("Writing mesh file %s ..." % ply_name)
+        print("Writing mesh file {} at {} ...".format(ply_name, datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
         with open(ply_name, 'w') as ply_fi:
             ply_fi.write('ply\n' + 'format ascii 1.0\n')
             ply_fi.write('comment H ' + str(int(input_mesh.graph['H'])) + '\n')

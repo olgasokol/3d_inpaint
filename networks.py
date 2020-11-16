@@ -186,7 +186,7 @@ class Inpaint_Depth_Net(nn.Module):
             enlarge_input = torch.zeros((n, c, h + residual_h, w + residual_w)).to(cuda)
             enlarge_input[..., anchor_h:anchor_h+h, anchor_w:anchor_w+w] = input
             # enlarge_input[:, 3] = 1. - enlarge_input[:, 3]
-            depth_output = self.forward(enlarge_input)
+            depth_output = self.forward(enlarge_input, True)
             depth_output = depth_output[..., anchor_h:anchor_h+h, anchor_w:anchor_w+w]
             # import pdb; pdb.set_trace()
 
@@ -196,8 +196,8 @@ class Inpaint_Depth_Net(nn.Module):
         input = input_feat
         input_mask = (input_feat[:, -2:-1] + input_feat[:, -1:]).clamp(0, 1).repeat(1, input.shape[1], 1, 1)
 
-        vis_input = input.cpu().data.numpy()
-        vis_input_mask = input_mask.cpu().data.numpy()
+        # vis_input = input.cpu().data.numpy()
+        # vis_input_mask = input_mask.cpu().data.numpy()
         H, W = input.shape[-2:]
         if refine_border is True:
             input, anchor = self.add_border(input, mask_flag=False)
@@ -210,8 +210,7 @@ class Inpaint_Depth_Net(nn.Module):
         for i in range(1, self.layer_size + 1):
             l_key = 'enc_{:d}'.format(i)
             h_key = 'h_{:d}'.format(i)
-            h_dict[h_key], h_mask_dict[h_key] = getattr(self, l_key)(
-                h_dict[h_key_prev], h_mask_dict[h_key_prev])
+            h_dict[h_key], h_mask_dict[h_key] = getattr(self, l_key)(h_dict[h_key_prev], h_mask_dict[h_key_prev])
             h_key_prev = h_key
 
         h_key = 'h_{:d}'.format(self.layer_size)
@@ -308,7 +307,7 @@ class Inpaint_Edge_Net(BaseNetwork):
             anchor_w = residual_w//2
             enlarge_input = torch.zeros((n, c, h + residual_h, w + residual_w)).to(cuda)
             enlarge_input[..., anchor_h:anchor_h+h, anchor_w:anchor_w+w] = input
-            edge_output = self.forward(enlarge_input)
+            edge_output = self.forward(enlarge_input, True)
             edge_output = edge_output[..., anchor_h:anchor_h+h, anchor_w:anchor_w+w]
 
         return edge_output

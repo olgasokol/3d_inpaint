@@ -938,14 +938,24 @@ def smooth_cntsyn_gap(init_depth_map, mask_region, context_region, init_mask_reg
         depth_map[fluxin_mask > 0] = fluxin_depths[fluxin_mask > 0]
 
     return depth_map
+import cv2
 
 def read_MiDaS_depth(disp_fi, disp_rescale=10., h=None, w=None):
     if 'npy' in os.path.splitext(disp_fi)[-1]:
         disp = np.load(disp_fi)
+        disp = disp - disp.min()
+    elif 'pfm' in os.path.splitext(disp_fi)[-1]:
+        from MiDaS.MiDaS_utils import read_pfm
+        (disp, _) = read_pfm(disp_fi)
+        print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
+        disp=disp.astype(np.float32)
+        disp = disp - disp.min()
+        disp = 255 - disp if np.max(disp)>0 else 1 - disp
+        print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
     else:
         disp = imageio.imread(disp_fi).astype(np.float32)
-    disp = disp - disp.min()
-    disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
+
+    # disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
     disp = (disp / disp.max()) * disp_rescale
     if h is not None and w is not None:
         disp = resize(disp / disp.max(), (h, w), order=1) * disp.max()
