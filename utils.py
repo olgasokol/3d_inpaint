@@ -10,8 +10,14 @@ import torch
 from torch import nn
 import matplotlib.pyplot as plt
 import re
+from PIL import Image
 
-from MiDaS import MiDaS_utils
+def vis_data(data, name=None):
+    img = Image.fromarray((data/data.max()*255).astype(np.uint8))
+    img.convert("L")
+    if name is not None:
+        img.save(name+'.png')
+    img.show()
 
 try:
     import cynetworkx as netx
@@ -56,7 +62,7 @@ def path_planning(num_frames, x, y, z, path_type=''):
 
 def open_small_mask(mask, context, open_iteration, kernel):
     np_mask = mask.cpu().data.numpy().squeeze().astype(np.uint8)
-    raw_mask = np_mask.copy()
+    # raw_mask = np_mask.copy()
     np_context = context.cpu().data.numpy().squeeze().astype(np.uint8)
     np_input = np_mask + np_context
     for _ in range(open_iteration):
@@ -838,7 +844,7 @@ def clean_far_edge(mask_edge, mask_edge_with_id, context_edge, mask, info_on_pix
 
     return far_edge, uncleaned_far_edge, far_edge_with_id, near_edge_with_id
 
-def get_MiDaS_samples(image_folder, depth_folder, config, specific=None, aft_certain=None):
+def read_args(image_folder, depth_folder, config, specific=None, aft_certain=None):
     lines = [os.path.splitext(os.path.basename(xx))[0] for xx in glob.glob(os.path.join(image_folder, '*' + config['img_format']))]
     samples = []
     generic_pose = np.eye(4)
@@ -943,11 +949,13 @@ def smooth_cntsyn_gap(init_depth_map, mask_region, context_region, init_mask_reg
     return depth_map
 import cv2
 
-def read_MiDaS_depth(disp_fi, disp_rescale=10., h=None, w=None):
+def read_depth_from_file(disp_fi, disp_rescale=10., h=None, w=None):
     if 'npy' in os.path.splitext(disp_fi)[-1]:
+        print("Read .npy file")
         disp = np.load(disp_fi)
         disp = disp - disp.min()
     elif 'pfm' in os.path.splitext(disp_fi)[-1]:
+        print("Read .pfm file")
         from MiDaS.MiDaS_utils import read_pfm
         (disp, _) = read_pfm(disp_fi)
         print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
@@ -956,13 +964,16 @@ def read_MiDaS_depth(disp_fi, disp_rescale=10., h=None, w=None):
         disp = 255 - disp if np.max(disp)>0 else 1 - disp
         print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
     else:
+        print("Read other file")
         disp = imageio.imread(disp_fi).astype(np.float32)
 
     # disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
     disp = (disp / disp.max()) * disp_rescale
     if h is not None and w is not None:
         disp = resize(disp / disp.max(), (h, w), order=1) * disp.max()
-    depth = 1. / np.maximum(disp, 0.05)
+    # vis_data(disp, "raw_depth")
+    # depth = 1. / np.maximum(disp, 0.05)
+    depth = 1. / np.maximum(disp, 0.175)
 
     return depth
 

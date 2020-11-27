@@ -30,7 +30,8 @@ from utils import require_depth_edge, filter_irrelevant_edge_new, open_small_mas
 from skimage.feature import canny
 from scipy import ndimage
 import time
-import transforms3d
+from utils import vis_data
+# import transforms3d
 
 def relabel_node(mesh, nodes, cur_node, new_node):
     if cur_node == new_node:
@@ -950,7 +951,7 @@ def get_edge_from_nodes(context_cc, erode_context_cc, mask_cc, edge_cc, extend_e
     rgb = np.zeros((H, W, 3))
     disp = np.zeros((H, W))
     depth = np.zeros((H, W))
-    real_depth = np.zeros((H, W))
+    # real_depth = np.zeros((H, W))
     edge = np.zeros((H, W))
     comp_edge = np.zeros((H, W))
     fpath_map = np.zeros((H, W)) - 1

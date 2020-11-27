@@ -188,5 +188,6 @@ def write_depth(path, depth, bits=1):
         cv2.imwrite(path + ".png", out.astype("uint8"))
     elif bits == 2:
         cv2.imwrite(path + ".png", out.astype("uint16"))
-        
+    np.save(path + '.npy', out)
+
     return
