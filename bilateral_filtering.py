@@ -2,7 +2,7 @@ import numpy as np
 from functools import reduce
 from utils import vis_data
 
-def sparse_bilateral_filtering(depth, config, mask=None, num_iter=None):
+def filtering(depth, config, mask=None, num_iter=None):
     vis_depth = depth.copy()
 
     for i in range(num_iter):
@@ -10,7 +10,7 @@ def sparse_bilateral_filtering(depth, config, mask=None, num_iter=None):
             window_size = config["filter_size"][i]
         else:
             window_size = config["filter_size"]
-        u_over, b_over, l_over, r_over = vis_depth_discontinuity(vis_depth, config['depth_threshold'], mask=mask)
+        u_over, b_over, l_over, r_over = vis_disp_discontinuity(vis_depth, config['disp_threshold'], mask=mask)
 
         discontinuity_map = (u_over + b_over + l_over + r_over).clip(0.0, 1.0)
         if mask is not None:
@@ -19,50 +19,49 @@ def sparse_bilateral_filtering(depth, config, mask=None, num_iter=None):
     return vis_depth
 
 
-def vis_depth_discontinuity(depth, depth_threshold, vis_diff=False, label=False, mask=None):
-    if label == False:
-        disp = 1./depth
-        # something like 1st derivative
-        # next pixel - curr in vert dir from 0 to n
-        u_diff = (disp[1:, :] - disp[:-1, :])[:-1, 1:-1]
-        # curr pixel - next in vert dir from 0 to n
-        b_diff = (disp[:-1, :] - disp[1:, :])[1:, 1:-1]
-        # next pixel - curr in horiz dir from 0 to n
-        l_diff = (disp[:, 1:] - disp[:, :-1])[1:-1, :-1]
-        # curr pixel - next in horiz dir from 0 to n
-        r_diff = (disp[:, :-1] - disp[:, 1:])[1:-1, 1:]
-        if mask is not None:
-            u_mask = (mask[1:, :] * mask[:-1, :])[:-1, 1:-1]
-            b_mask = (mask[:-1, :] * mask[1:, :])[1:, 1:-1]
-            l_mask = (mask[:, 1:] * mask[:, :-1])[1:-1, :-1]
-            r_mask = (mask[:, :-1] * mask[:, 1:])[1:-1, 1:]
-            u_diff = u_diff * u_mask
-            b_diff = b_diff * b_mask
-            l_diff = l_diff * l_mask
-            r_diff = r_diff * r_mask
-        u_over = (np.abs(u_diff) > depth_threshold).astype(np.float32)
-        b_over = (np.abs(b_diff) > depth_threshold).astype(np.float32)
-        l_over = (np.abs(l_diff) > depth_threshold).astype(np.float32)
-        r_over = (np.abs(r_diff) > depth_threshold).astype(np.float32)
-    else:
-        disp = depth
-        u_diff = (disp[1:, :] * disp[:-1, :])[:-1, 1:-1]
-        b_diff = (disp[:-1, :] * disp[1:, :])[1:, 1:-1]
-        l_diff = (disp[:, 1:] * disp[:, :-1])[1:-1, :-1]
-        r_diff = (disp[:, :-1] * disp[:, 1:])[1:-1, 1:]
-        if mask is not None:
-            u_mask = (mask[1:, :] * mask[:-1, :])[:-1, 1:-1]
-            b_mask = (mask[:-1, :] * mask[1:, :])[1:, 1:-1]
-            l_mask = (mask[:, 1:] * mask[:, :-1])[1:-1, :-1]
-            r_mask = (mask[:, :-1] * mask[:, 1:])[1:-1, 1:]
-            u_diff = u_diff * u_mask
-            b_diff = b_diff * b_mask
-            l_diff = l_diff * l_mask
-            r_diff = r_diff * r_mask
-        u_over = (np.abs(u_diff) > 0).astype(np.float32)
-        b_over = (np.abs(b_diff) > 0).astype(np.float32)
-        l_over = (np.abs(l_diff) > 0).astype(np.float32)
-        r_over = (np.abs(r_diff) > 0).astype(np.float32)
+def vis_disp_discontinuity(depth, disp_threshold, vis_diff=False, mask=None):
+    disp = 1./depth
+    # something like 1st derivative
+    # next pixel - curr in vert dir from 0 to n
+    u_diff = (disp[1:, :] - disp[:-1, :])[:-1, 1:-1]
+    # curr pixel - next in vert dir from 0 to n
+    b_diff = (disp[:-1, :] - disp[1:, :])[1:, 1:-1]
+    # next pixel - curr in horiz dir from 0 to n
+    l_diff = (disp[:, 1:] - disp[:, :-1])[1:-1, :-1]
+    # curr pixel - next in horiz dir from 0 to n
+    r_diff = (disp[:, :-1] - disp[:, 1:])[1:-1, 1:]
+    if mask is not None:
+        u_mask = (mask[1:, :] * mask[:-1, :])[:-1, 1:-1]
+        b_mask = (mask[:-1, :] * mask[1:, :])[1:, 1:-1]
+        l_mask = (mask[:, 1:] * mask[:, :-1])[1:-1, :-1]
+        r_mask = (mask[:, :-1] * mask[:, 1:])[1:-1, 1:]
+        u_diff = u_diff * u_mask
+        b_diff = b_diff * b_mask
+        l_diff = l_diff * l_mask
+        r_diff = r_diff * r_mask
+    u_over = (np.abs(u_diff) > disp_threshold).astype(np.float32)
+    b_over = (np.abs(b_diff) > disp_threshold).astype(np.float32)
+    l_over = (np.abs(l_diff) > disp_threshold).astype(np.float32)
+    r_over = (np.abs(r_diff) > disp_threshold).astype(np.float32)
+
+    #     disp = depth
+    #     u_diff = (disp[1:, :] * disp[:-1, :])[:-1, 1:-1]
+    #     b_diff = (disp[:-1, :] * disp[1:, :])[1:, 1:-1]
+    #     l_diff = (disp[:, 1:] * disp[:, :-1])[1:-1, :-1]
+    #     r_diff = (disp[:, :-1] * disp[:, 1:])[1:-1, 1:]
+    #     if mask is not None:
+    #         u_mask = (mask[1:, :] * mask[:-1, :])[:-1, 1:-1]
+    #         b_mask = (mask[:-1, :] * mask[1:, :])[1:, 1:-1]
+    #         l_mask = (mask[:, 1:] * mask[:, :-1])[1:-1, :-1]
+    #         r_mask = (mask[:, :-1] * mask[:, 1:])[1:-1, 1:]
+    #         u_diff = u_diff * u_mask
+    #         b_diff = b_diff * b_mask
+    #         l_diff = l_diff * l_mask
+    #         r_diff = r_diff * r_mask
+    #     u_over = (np.abs(u_diff) > 0).astype(np.float32)
+    #     b_over = (np.abs(b_diff) > 0).astype(np.float32)
+    #     l_over = (np.abs(l_diff) > 0).astype(np.float32)
+    #     r_over = (np.abs(r_diff) > 0).astype(np.float32)
     u_over = np.pad(u_over, 1, mode='constant')
     b_over = np.pad(b_over, 1, mode='constant')
     l_over = np.pad(l_over, 1, mode='constant')
@@ -83,9 +82,6 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
     if window_size == False:
         window_size = config['filter_size']
     midpt = window_size//2
-    ax = np.arange(-midpt, midpt+1.)
-    xx, yy = np.meshgrid(ax, ax)
-    spatial_term = np.exp(-(xx ** 2 + yy ** 2) / (2. * sigma_s ** 2))
 
     # padding
     depth = depth[1:-1, 1:-1]
@@ -93,14 +89,14 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
     pad_depth = np.pad(depth, (midpt,midpt), 'edge')
 
     # filtering
-    output = depth.copy()
+    output_depth = depth.copy()
     pad_depth_patches = rolling_window(pad_depth, [window_size, window_size], [1,1])
 
     # if mask is not None:
     #     pad_mask = np.pad(mask, (midpt,midpt), 'constant')
     #     pad_mask_patches = rolling_window(pad_mask, [window_size, window_size], [1,1])
 
-    # weighted median filter here
+    'weighted median filter here'
     if discontinuity_map is not None:
         # padding
         discontinuity_map = discontinuity_map[1:-1, 1:-1]
@@ -108,10 +104,10 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
         pad_discontinuity_map = np.pad(discontinuity_map, (midpt, midpt), 'edge')
         pad_discontinuity_hole = 1 - pad_discontinuity_map
 
-        # filtering
         pad_discontinuity_patches = rolling_window(pad_discontinuity_map, [window_size, window_size], [1, 1])
         pad_discontinuity_hole_patches = rolling_window(pad_discontinuity_hole, [window_size, window_size], [1, 1])
 
+        # filtering
         pH, pW = pad_depth_patches.shape[:2]
         for pi in range(pH):
             for pj in range(pW):
@@ -130,9 +126,9 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
                 # if mask is not None:
                 #     coef = coef * pad_mask_patches[pi, pj]
 
-                # if the whole patch is a discontinuity
+                'if the whole patch is a discontinuity'
                 if coef.max() == 0:
-                    output[pi, pj] = patch_midpt
+                    output_depth[pi, pj] = patch_midpt
                 else:
                     # coef = sorta probability map that shows where there is NO discontinuity
                     coef = coef/(coef.sum())
@@ -140,14 +136,17 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
                     coef_order = coef.ravel()[depth_order]
                     # sorta like comulative distribution now
                     cum_coef = np.cumsum(coef_order)
-                    # and we select index that kinda shows 0.5 percentile
+                    # and we select index that shows 0.5 percentile
                     ind = np.digitize(0.5, cum_coef)
                     # and then select value at that index as filtered pix value
-                    output[pi, pj] = depth_patch.ravel()[depth_order][ind]
-    # if discontinuity_map is None:
-    # bilateral filter here
+                    output_depth[pi, pj] = depth_patch.ravel()[depth_order][ind]
     else:
+        'if discontinuity_map is None, bilateral filter is used'
         pH, pW = pad_depth_patches.shape[:2]
+        ax = np.arange(-midpt, midpt + 1.)
+        xx, yy = np.meshgrid(ax, ax)
+        spatial_term = np.exp(-(xx ** 2 + yy ** 2) / (2. * sigma_s ** 2))
+
         for pi in range(pH):
             for pj in range(pW):
 
@@ -158,16 +157,16 @@ def bilateral_filter(depth, config, discontinuity_map=None, mask=None, window_si
                 coef = spatial_term * range_term
 
                 if coef.sum() == 0:
-                    output[pi, pj] = patch_midpt
+                    output_depth[pi, pj] = patch_midpt
                     continue
                 else:
                     coef = coef/(coef.sum())
                     coef_order = coef.ravel()[depth_order]
                     cum_coef = np.cumsum(coef_order)
                     ind = np.digitize(0.5, cum_coef)
-                    output[pi, pj] = depth_patch.ravel()[depth_order][ind]
+                    output_depth[pi, pj] = depth_patch.ravel()[depth_order][ind]
 
-    return output
+    return output_depth
 
 # cuts a into batches of size window
 def rolling_window(a, window, strides):

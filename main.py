@@ -10,7 +10,7 @@ import yaml
 import time
 from datetime import datetime
 import sys
-from mesh import write_ply, read_ply, output_3d_photo
+from mesh import inpaint, read_ply, output_3d_photo
 from utils import read_args, read_depth_from_file, vis_data
 import torch
 import cv2
@@ -21,7 +21,7 @@ from networks import Inpaint_Color_Net, Inpaint_Depth_Net, Inpaint_Edge_Net
 from MiDaS.run import run_depth_estimation, run_depth_estimation_new
 from MiDaS.monodepth_net import MonoDepthNet
 import MiDaS.MiDaS_utils as MiDaS_utils
-from bilateral_filtering import sparse_bilateral_filtering
+from bilateral_filtering import filtering
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, default='argument.yml',help='Configure of post processing')
@@ -71,16 +71,16 @@ for idx in tqdm(range(len(sample_list))):
 
     if image.ndim == 2:
         image = image[..., None].repeat(3, -1)
-    if np.sum(np.abs(image[..., 0] - image[..., 1])) == 0 and np.sum(np.abs(image[..., 1] - image[..., 2])) == 0:
-        config['gray_image'] = True
-    else:
-        config['gray_image'] = False
+    # if np.sum(np.abs(image[..., 0] - image[..., 1])) == 0 and np.sum(np.abs(image[..., 1] - image[..., 2])) == 0:
+    #     config['gray_image'] = True
+    # else:
+    #     config['gray_image'] = False
 
     if not(config['load_ply'] is True and os.path.exists(mesh_fi)):
-        vis_data(depth, "depth_from_midas")
-        depth_n = sparse_bilateral_filtering(depth.copy(), config, num_iter=config['sparse_iter'])
-        # vis_data(depth_n-depth, "removed_features")
-        vis_data(depth_n, "depth_after_filter")
+        # vis_data(depth,name=sample["ref_img_fi"]+ "depth_from_midas")
+        depth_n = filtering(depth.copy(), config, num_iter=config['sparse_iter'])
+        # vis_data(depth_n,name= sample["ref_img_fi"]+"depth_after_median_filter")
+        # continue
         depth=depth_n
         # continue
         torch.cuda.empty_cache()
@@ -108,15 +108,15 @@ for idx in tqdm(range(len(sample_list))):
 
 
         print("Writing depth ply at {}".format(datetime.fromtimestamp(time.time()).strftime(config['time_format'])))
-        rt_info = write_ply(image,
-                            depth,
-                            sample['int_mtx'],
-                            mesh_fi,
-                            config,
-                            rgb_model,
-                            depth_edge_model,
-                            depth_edge_model,
-                            depth_feat_model)
+        rt_info = inpaint(image,
+                          depth,
+                          sample['int_mtx'],
+                          mesh_fi,
+                          config,
+                          rgb_model,
+                          depth_edge_model,
+                          depth_edge_model,
+                          depth_feat_model)
 
         if rt_info is False:
             continue

@@ -1830,15 +1830,15 @@ def DL_inpaint_edge(mesh,
     return mesh, info_on_pix, specific_mask_nodes, new_edge_ccs, connnect_points_ccs, np_image
 
 
-def write_ply(image,
-              depth,
-              int_mtx,
-              ply_name,
-              config,
-              rgb_model,
-              depth_edge_model,
-              depth_edge_model_init,
-              depth_feat_model):
+def inpaint(image,
+            depth,
+            int_mtx,
+            ply_name,
+            config,
+            rgb_model,
+            depth_edge_model,
+            depth_edge_model_init,
+            depth_feat_model):
     depth = depth.astype(np.float64)
     input_mesh, xy2depth, image, depth = create_mesh(depth, image, int_mtx, config)
 

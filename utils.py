@@ -11,14 +11,6 @@ from torch import nn
 import matplotlib.pyplot as plt
 import re
 from PIL import Image
-
-def vis_data(data, name=None):
-    img = Image.fromarray((data/data.max()*255).astype(np.uint8))
-    img.convert("L")
-    if name is not None:
-        img.save(name+'.png')
-    img.show()
-
 try:
     import cynetworkx as netx
 except ImportError:
@@ -34,6 +26,94 @@ from mpl_toolkits.mplot3d import Axes3D
 import time
 from scipy.interpolate import interp1d
 from collections import namedtuple
+from typing import List, Set
+from PIL import Image, ImageDraw, ImageOps, ImageFont
+
+from matplotlib.pyplot import imshow
+import numpy as np
+import requests
+from io import BytesIO
+import colorsys
+
+
+def vis_data(data, name=None, masks=[], ccs_id=-1, colorcode=False):
+    data=data-data.min()
+    data=(data/data.max()*255).astype(np.uint8)
+    if(len(masks)==0):
+        if colorcode:
+            cm = plt.get_cmap('jet')
+            img = cm(data)[:, :, :3]
+            img = Image.fromarray((img * 255).astype(np.uint8), "RGB")
+        else:
+            img = data
+            img = Image.fromarray((img).astype(np.uint8), "L")
+    else:
+        img=data[:,:,:3]
+        img = Image.fromarray((img*255).astype(np.uint8), "RGB")
+        img = ImageOps.invert(img)
+        masks, cc_names = masks
+        # white_filter = Image.new("RGBA", img.size, (255, 255, 255, 100))
+        # img = Image.alpha_composite(img, white_filter)
+        # img.convert('RGB')
+
+    colors = get_colors(len(masks))
+    draw_c = ImageDraw.Draw(img)
+    # draw_c.rectangle([(0, 0), data.shape], fill=(225,225,225))
+
+
+    size=7
+    fnt = ImageFont.truetype("Pillow/Tests/fonts/FreeMono.ttf", 2*size)
+    for i in range(len(masks)):
+        ccs, c, cc_name = masks[i], colors[i], cc_names[i]
+        c = (int(c[0] * 255), int(c[1] * 255), int(c[2] * 255))
+        if(len(ccs[ccs_id])!=0):
+            draw_c.rectangle([(size//2, size + size*3 * i), (int(size*1.25 * len(cc_name)), int(size*3.5) + size*3 * i)], fill=c)
+            draw_c.text((size//2, int(size*1.25) + size*3 * i), cc_name, font=fnt, fill=(0, 0, 0))
+        draw(draw_c, ccs, data, ccs_id, c)
+
+
+    if name is not None:
+        img.save(name+'.png')
+    else:
+        img.show()
+
+def vis_edges(edge_ccs: List[Set], graph: netx.Graph, name=None):
+    h=graph.graph["H"]
+    w=graph.graph["W"]
+    edge_map = np.zeros((h, w))
+    i=0
+    for cc in edge_ccs:
+        i+=1
+        for (x,y,d) in cc:
+            edge_map[x,y]=i
+    vis_data(edge_map, name)
+
+def vis_graph(g):
+    h = g.graph["H"]
+    w = g.graph["W"]
+    canv=np.zeros((h,w))
+    xyds = list(g.nodes.keys())
+    for x, y, d in xyds:
+        if canv[x,y]!=0:
+            print("double layer at {}, {}".format(x,y))
+        canv[x,y]=-d
+    vis_data(canv)
+
+
+def draw(draw, ccs, color_data, ccs_id, c):
+    if ccs_id>=0:
+        ccs=[ccs[ccs_id]]
+    for i,cc in enumerate(ccs):
+        for (x,y,d) in cc:
+            r,g,b=color_data[x,y]
+            r,g,b=min(int(r/3+c[0]/3*2),255), min(int(g/3+c[1]/3*2), 255),min(int(b/3+c[2]/3*2), 255)
+            draw.point((y,x), fill=(r,g,b))
+            color_data[x,y]=[r,g,b]
+
+def get_colors(N):
+    HSV_tuples = [(x*1.0/N, 1, 0.8) for x in range(N)]
+    RGB_tuples = [colorsys.hsv_to_rgb(*x) for x in HSV_tuples]
+    return RGB_tuples
 
 def path_planning(num_frames, x, y, z, path_type=''):
     if path_type == 'straight-line':
@@ -961,19 +1041,26 @@ def read_depth_from_file(disp_fi, disp_rescale=10., h=None, w=None):
         print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
         disp=disp.astype(np.float32)
         disp = disp - disp.min()
-        disp = 255 - disp if np.max(disp)>0 else 1 - disp
+        disp = 255. - disp if np.max(disp)>0 else 1 - disp
         print(f"max depth val {np.max(disp)}, min depth val {np.min(disp)}")
     else:
         print("Read other file")
         disp = imageio.imread(disp_fi).astype(np.float32)
+        disp = 255. - disp
+        # disp = np.array(ImageOps.invert(Image.open(disp_fi).convert('LA')))
+
+
 
     # disp = cv2.blur(disp / disp.max(), ksize=(3, 3)) * disp.max()
     disp = (disp / disp.max()) * disp_rescale
     if h is not None and w is not None:
         disp = resize(disp / disp.max(), (h, w), order=1) * disp.max()
-    # vis_data(disp, "raw_depth")
-    # depth = 1. / np.maximum(disp, 0.05)
-    depth = 1. / np.maximum(disp, 0.175)
+    # depth = 1. / np.maximum(disp, 0.02)
+    # vis_data(disp)
+    # vis_data(-disp, name="image"+disp_fi.split("depth")[1][:-4] +"_raw_disp")
+    depth = 1. / np.maximum(disp, 0.12)
+    # this f-la doesn'r loose info in bg, potentially better for k-lens depth maps
+    # depth = (1. / (disp+1))+7
 
     return depth
 
@@ -1347,10 +1434,10 @@ def vis_depth_edge_connectivity(depth, config):
     b_diff = (disp[:-1, :] - disp[1:, :])[1:, 1:-1]
     l_diff = (disp[:, 1:] - disp[:, :-1])[1:-1, :-1]
     r_diff = (disp[:, :-1] - disp[:, 1:])[1:-1, 1:]
-    u_over = (np.abs(u_diff) > config['depth_threshold']).astype(np.float32)
-    b_over = (np.abs(b_diff) > config['depth_threshold']).astype(np.float32)
-    l_over = (np.abs(l_diff) > config['depth_threshold']).astype(np.float32)
-    r_over = (np.abs(r_diff) > config['depth_threshold']).astype(np.float32)
+    u_over = (np.abs(u_diff) > config['disp_threshold']).astype(np.float32)
+    b_over = (np.abs(b_diff) > config['disp_threshold']).astype(np.float32)
+    l_over = (np.abs(l_diff) > config['disp_threshold']).astype(np.float32)
+    r_over = (np.abs(r_diff) > config['disp_threshold']).astype(np.float32)
     concat_diff = np.stack([u_diff, b_diff, r_diff, l_diff], axis=-1)
     concat_over = np.stack([u_over, b_over, r_over, l_over], axis=-1)
     over_diff = concat_diff * concat_over

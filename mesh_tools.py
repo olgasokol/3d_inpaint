@@ -517,12 +517,12 @@ def enlarge_border(mesh, info_on_pix, depth, image, config):
 
     return mesh, info_on_pix, depth, image
 
-def fill_missing_node(mesh, info_on_pix, image, depth):
-    for x in range(mesh.graph['bord_up'], mesh.graph['bord_down']):
-        for y in range(mesh.graph['bord_left'], mesh.graph['bord_right']):
+def fill_missing_node(graph, info_on_pix, image, depth):
+    for x in range(graph.graph['bord_up'], graph.graph['bord_down']):
+        for y in range(graph.graph['bord_left'], graph.graph['bord_right']):
             if info_on_pix.get((x, y)) is None:
                 print("fill missing node = ", x, y)
-                import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
                 re_depth, re_count = 0, 0
                 for ne in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
                     if info_on_pix.get(ne) is not None:
@@ -537,11 +537,11 @@ def fill_missing_node(mesh, info_on_pix, image, depth):
                                             'color':image[x, y],
                                             'synthesis':False,
                                             'disp':1./re_depth}]
-                mesh.add_node((x, y, re_depth), color=image[x, y],
-                                                synthesis=False,
-                                                disp=1./re_depth,
-                                                cc_id=set())
-    return mesh, info_on_pix, depth
+                graph.add_node((x, y, re_depth), color=image[x, y],
+                               synthesis=False,
+                               disp=1./re_depth,
+                               cc_id=set())
+    return graph, info_on_pix, depth
 
 
 
