@@ -712,13 +712,12 @@ def incomplete_node(mesh, edge_maps, info_on_pix):
 
 def edge_inpainting(edge_id, context_cc, erode_context_cc, mask_cc, edge_cc, extend_edge_cc,
                     mesh, edge_map, edge_maps_with_id, config, union_size, depth_edge_model, inpaint_iter):
-    edge_dict = get_edge_from_nodes(context_cc, erode_context_cc, mask_cc, edge_cc, extend_edge_cc,
-                                        mesh.graph['H'], mesh.graph['W'], mesh)
+    edge_dict = get_edge_dict_from_nodes(context_cc, erode_context_cc, mask_cc, edge_cc, extend_edge_cc,
+                                         mesh.graph['H'], mesh.graph['W'], mesh)
     edge_dict['edge'], end_depth_maps, _ = \
         filter_irrelevant_edge_new(edge_dict['self_edge'] + edge_dict['comp_edge'],
                                 edge_map,
                                 edge_maps_with_id,
-                                edge_id,
                                 edge_dict['context'],
                                 edge_dict['depth'], mesh, context_cc | erode_context_cc, spdb=True)
     patch_edge_dict = dict()
@@ -945,7 +944,7 @@ def get_mask_from_nodes(mesh, cc, H, W):
     return mask
 
 
-def get_edge_from_nodes(context_cc, erode_context_cc, mask_cc, edge_cc, extend_edge_cc, H, W, mesh):
+def get_edge_dict_from_nodes(context_cc, erode_context_cc, mask_cc, edge_cc, extend_edge_cc, H, W, mesh):
     context = np.zeros((H, W))
     mask = np.zeros((H, W))
     rgb = np.zeros((H, W, 3))
@@ -1077,8 +1076,10 @@ def convert2tensor(input_dict):
     rt_dict = {}
     for key, value in input_dict.items():
         if 'rgb' in key or 'color' in key:
+            # h, w, rgb to 1, rgb, h,w
             rt_dict[key] = torch.FloatTensor(value).permute(2, 0, 1)[None, ...]
         else:
+            # h,w,to 1,1, h,w
             rt_dict[key] = torch.FloatTensor(value)[None, None, ...]
 
     return rt_dict

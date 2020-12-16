@@ -1,6 +1,7 @@
 import os
 import glob
 import cv2
+from tqdm import tqdm
 import scipy.misc as misc
 from skimage.transform import resize
 import numpy as np
@@ -36,7 +37,7 @@ from io import BytesIO
 import colorsys
 
 
-def vis_data(data, name=None, masks=[], ccs_id=-1, colorcode=False):
+def vis_data(data, name=None, masks=[], ccs_id=-1, colorcode=False, rgb=False):
     data=data-data.min()
     data=(data/data.max()*255).astype(np.uint8)
     if(len(masks)==0):
@@ -44,21 +45,20 @@ def vis_data(data, name=None, masks=[], ccs_id=-1, colorcode=False):
             cm = plt.get_cmap('jet')
             img = cm(data)[:, :, :3]
             img = Image.fromarray((img * 255).astype(np.uint8), "RGB")
-        else:
+        elif not rgb:
             img = data
             img = Image.fromarray((img).astype(np.uint8), "L")
+        elif rgb:
+            img = data
+            img = Image.fromarray((img).astype(np.uint8), "RGB")
     else:
         img=data[:,:,:3]
         img = Image.fromarray((img*255).astype(np.uint8), "RGB")
         img = ImageOps.invert(img)
         masks, cc_names = masks
-        # white_filter = Image.new("RGBA", img.size, (255, 255, 255, 100))
-        # img = Image.alpha_composite(img, white_filter)
-        # img.convert('RGB')
 
     colors = get_colors(len(masks))
     draw_c = ImageDraw.Draw(img)
-    # draw_c.rectangle([(0, 0), data.shape], fill=(225,225,225))
 
 
     size=7
@@ -88,17 +88,104 @@ def vis_edges(edge_ccs: List[Set], graph: netx.Graph, name=None):
             edge_map[x,y]=i
     vis_data(edge_map, name)
 
-def vis_graph(g):
+def vis_graph(g: netx.Graph, name=None):
     h = g.graph["H"]
     w = g.graph["W"]
-    canv=np.zeros((h,w))
-    xyds = list(g.nodes.keys())
-    for x, y, d in xyds:
-        if canv[x,y]!=0:
-            print("double layer at {}, {}".format(x,y))
-        canv[x,y]=-d
-    vis_data(canv)
 
+    fg_canv, bg_canv, canv = np.zeros((h,w)), np.zeros((h,w)), np.zeros((h,w))
+    fg_repeat, bg_repeat, main_repeat=0,0,0
+    viewed = set()
+    canvases = []
+    xyds = list(g.nodes.keys())
+    for n in tqdm(xyds):
+        # if n in viewed:
+        #     continue
+        # viewed, new_canvases = get_connected_far_near(n, viewed, g)
+        # for c in new_canvases:
+        #     canvases.append(c)
+        x,y,d=n
+        if "far" in g.nodes[n]:
+            if fg_canv[x, y] != 0:
+                fg_repeat+=1
+            fg_canv[x, y] = -d
+            if g.nodes[n]["far"] != None:
+                for fn in g.nodes[n]["far"]:
+                    if bg_canv[fn[0], fn[1]]==0:
+                        # print("repeat in bg through fg")
+
+                        bg_canv[fn[0], fn[1]]=-fn[2]
+        elif "near" in g.nodes[n]:
+            bg_canv[x, y] = -d
+            if bg_canv[x, y] != 0:
+                bg_repeat+=1
+            if g.nodes[n]["near"]!=None:
+                for nn in g.nodes[n]["near"]:
+                    if fg_canv[nn[0], nn[1]]==0:
+                        fg_canv[nn[0], nn[1]]=-nn[2]
+                    # print("repeat in fg_canv through bg")
+
+        else:
+            canv[x, y] = -d
+            # if canv[x,y]!=0:
+    #             main_repeat+=1
+    # if main_repeat>0:
+    #     print("double layer at {}".format(main_repeat))
+    # if fg_repeat>0:
+    #     print("repeat in fg_canv {}".format(fg_repeat))
+    # if bg_repeat>0:
+    #     print("repeat in bg_canv {}".format(bg_repeat))
+
+    vis_data(fg_canv, name="g_{}_bg".format(name))
+    vis_data(bg_canv, name="g_{}_fg".format(name))
+    vis_data(canv, name="g_{}_main".format(name))
+    # for i,c in enumerate(canvases):
+    #     vis_data(c, name="g_{}_{}".format(name, i))
+
+def get_connected_far_near(node, viewed, g):
+    h = g.graph["H"]
+    w = g.graph["W"]
+
+    new_seed_bg,new_seed_fg,new_seed, curr = set(), set(), set(), set()
+    canvases=[]
+    curr.add(node)
+    canv = np.zeros((h, w))
+
+    while len(curr) > 0:
+        n = curr.pop()
+        x, y, d = n
+        #     viewed.add(n)
+        #     continue
+        viewed.add(n)
+        if canv[x, y]==0:
+        #     new_seed.add(n)
+            canv[x, y] = -d
+        for ne in g.neighbors(n):
+            if ne not in viewed:
+                curr.add(ne)
+            if ne in new_seed:
+                new_seed.remove(ne)
+        if "far" in g.nodes[n] and g.nodes[n]["far"] is not None:
+            for fn in g.nodes[n]["far"]:
+                if fn not in viewed:
+                    new_seed.add(fn)
+        if "near" in g.nodes[n] and g.nodes[n]["near"] is not None:
+            for nn in g.nodes[n]["near"]:
+                if nn not in viewed:
+                    new_seed.add(nn)
+        if len(curr)==0 and (len(new_seed)!=0 or len(new_seed_bg)!=0 or len(new_seed_fg)!=0):
+            if len(new_seed)!=0:
+                new_node=new_seed.pop()
+            elif len(new_seed_bg)!=0:
+                new_node=new_seed_bg.pop()
+            else:
+                new_node = new_seed_fg.pop()
+
+            if new_node not in viewed:
+                curr.add(new_node)
+                canvases.append(canv.copy())
+                canv = np.zeros((h, w))+0.
+    canvases.append(canv.copy())
+    return viewed, canvases
 
 def draw(draw, ccs, color_data, ccs_id, c):
     if ccs_id>=0:
@@ -152,7 +239,7 @@ def open_small_mask(mask, context, open_iteration, kernel):
     
     return out_mask
 
-def filter_irrelevant_edge_new(self_edge, comp_edge, other_edges, other_edges_with_id, current_edge_id, context, depth, mesh, context_cc, spdb=False):
+def filter_irrelevant_edge_new(self_edge, comp_edge, other_edges, other_edges_with_id, context, depth, mesh, context_cc, spdb=False):
     other_edges = other_edges.squeeze().astype(np.uint8)
     other_edges_with_id = other_edges_with_id.squeeze()
     self_edge = self_edge.squeeze()
@@ -247,8 +334,8 @@ def clean_far_edge_new(input_edge, end_depth_maps, mask, context, global_mesh, i
         fpath = []
         iter_fpath = []
         if len(end_pt) > 2 or len(end_pt) == 0:
-            if len(end_pt) > 2:
-                continue
+            # if len(end_pt) > 2:
+            #     continue
             continue
         if len(end_pt) == 2:
             ravel_end = [*end_pt]
@@ -1166,7 +1253,7 @@ def filter_irrelevant_edge(self_edge, other_edges, other_edges_with_id, current_
     return other_edges, other_edges_info
 
 def require_depth_edge(context_edge, mask):
-    dilate_mask = cv2.dilate(mask, np.array([[1,1,1],[1,1,1],[1,1,1]]).astype(np.uint8), iterations=1)
+    dilate_mask = cv2.dilate(mask, np.ones((3,3)).astype(np.uint8), iterations=1)
     if (dilate_mask * context_edge).max() == 0:
         return False
     else:

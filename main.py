@@ -115,7 +115,6 @@ for idx in tqdm(range(len(sample_list))):
                           config,
                           rgb_model,
                           depth_edge_model,
-                          depth_edge_model,
                           depth_feat_model)
 
         if rt_info is False:
